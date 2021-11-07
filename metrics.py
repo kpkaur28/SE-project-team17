@@ -4,8 +4,8 @@ import csv
 import json
 import pandas as pd
 
-#personal token
-token = "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"
+#add personal token
+token = ""
 headers = {
 	"Authorization": "token " + token
 }
