@@ -64,6 +64,7 @@ def get_merge_status(pull_url):
 	print(merge_status)
 	return merge_status
 
+## Metric 1 - Presence of hard forks
 def check_for_hard_forks():
 	df = pd.read_csv("csv/asfi_refined_1_proj.csv")
 	df['has_hard_fork'] = NaN
@@ -124,6 +125,7 @@ def pattern_matching(comment):
 	#print(duplicate_pr)
 	return duplicate_pr
 
+## Metric 2 - Ratio of duplicate PRs
 def ratio_of_duplicate_prs():
 	df = pd.read_csv("csv/asfi_refined_1_proj.csv")
 	df['ratio_of_duplicate_prs'] = NaN
