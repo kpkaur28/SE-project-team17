@@ -18,7 +18,7 @@ headers = {
 ##optimization
 
 def get_repos():
-	df = pd.read_csv("csv/asfi_refined_1_proj.csv") 
+	df = pd.read_csv("csv/asfi_refined_50_proj.csv") 
 	project_list = []
 	project_list = df.pj_github_api_url
 	print("No. of projects:", len(project_list))
@@ -66,7 +66,7 @@ def get_merge_status(pull_url):
 
 ## Metric 1 - Presence of hard forks
 def check_for_hard_forks():
-	df = pd.read_csv("csv/asfi_refined_1_proj.csv")
+	df = pd.read_csv("csv/asfi_refined_50_proj.csv")
 	df['has_hard_fork'] = NaN
 	is_hard_fork = False
 
@@ -96,15 +96,16 @@ def check_for_hard_forks():
 						df.loc[df['pj_github_api_url'] == repo, 'has_hard_fork'] = is_hard_fork
 						
 		print(repo, is_hard_fork)
-		df.to_csv("csv/asfi_refined_1_proj.csv", index=False)
+		df.to_csv("csv/asfi_refined_50_proj.csv", index=False)
 
 	except Exception as e: 
+		print("Repo Failed:", repo)
 		print('{}'.format(e))
 		pass
 
 def get_comments(pull_url):
 	
-	response = requests.get(pull_url+"/comments?per_page=100&page=1").json()
+	response = requests.get(pull_url+"/comments?per_page=100&page=1", headers=headers).json()
 	comments_list = []
 	
 	for resp in response: 
@@ -127,25 +128,30 @@ def pattern_matching(comment):
 
 ## Metric 2 - Ratio of duplicate PRs
 def ratio_of_duplicate_prs():
-	df = pd.read_csv("csv/asfi_refined_1_proj.csv")
+	df = pd.read_csv("csv/asfi_refined_50_proj.csv")
 	df['ratio_of_duplicate_prs'] = NaN
+	try: 
+		repos = get_repos()
+		for repo in repos:
+			pulls_data = get_pulls(repo)
+			total_prs = len(get_pulls(repo))
 
-	repos = get_repos()
-	for repo in repos:
-		pulls_data = get_pulls(repo)
-		total_prs = len(get_pulls(repo))
+			for pull_request in pulls_data:
+				comments = get_comments(pull_request)
+				for comment in comments:
+					duplicate_prs = pattern_matching(comment)
+		
+			ratio = duplicate_prs / total_prs
+			df.loc[df['pj_github_api_url'] == repo, 'ratio_of_duplicate_prs'] = ratio
+			print(repo, ratio)
+			df.to_csv("csv/asfi_refined_50_proj.csv", index=False)
 
-		for pull_request in pulls_data:
-			comments = get_comments(pull_request)
-			for comment in comments:
-				duplicate_prs = pattern_matching(comment)
-	
-		ratio = duplicate_prs / total_prs
-		df.loc[df['pj_github_api_url'] == repo, 'ratio_of_duplicate_prs'] = ratio
-		print(repo, ratio)
-		df.to_csv("csv/asfi_refined_1_proj.csv", index=False)
+	except Exception as e: 
+		print("Repo Failed:", repo)
+		print('{}'.format(e))
+		pass
 
-check_for_hard_forks()
+#check_for_hard_forks()
 ratio_of_duplicate_prs()
 
 #Testing
