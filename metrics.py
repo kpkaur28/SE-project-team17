@@ -26,16 +26,19 @@ def get_repos():
 
 def get_forks(project):
 	try:
-		resp = requests.get(project+"/forks?per_page=100&page=1", headers=headers)
-		if resp.status_code == 404:
-			return []
-		else:
-			response = requests.get(project+"/forks?per_page=100&page=1", headers=headers).json()
-			forks_url = []
-			for resp in response: 
-				forks_url.append(resp['url'])
-			print("No. of forks:", len(forks_url))
-			return forks_url
+		i = 1
+		response = requests.get(project+"/forks?per_page=100&page=1", headers=headers)
+		while response.json():
+			if response.status_code == 404:
+				return []
+			else:
+				response = requests.get(project+f"/forks?per_page=100&page={i}", headers=headers)
+				forks_url = []
+				for resp in response.json(): 
+					forks_url.append(resp['url'])
+					print("No. of forks:", len(forks_url))
+			i+=1
+		return forks_url
 
 	except Exception as e:
 		print("In get_forks function")
@@ -43,16 +46,22 @@ def get_forks(project):
 
 def get_pulls(url):
 	try:
-		resp = requests.get(url+"/pulls?per_page=100&page=1", headers=headers)
-		if resp.status_code == 404:
-			return []
-		else:
-			response = requests.get(url+"/pulls?per_page=100&page=1", headers=headers).json()
-			pulls_url = []
-			for resp in response:
-				pulls_url.append(resp['url'])
-			#print("No. of pulls:", len(pulls_url))
-			return pulls_url
+		i = 1
+		response = requests.get(url+"/pulls?per_page=100&page=1", headers=headers)
+		
+		while response.json():
+			
+			if response.status_code == 404:
+				return []
+			else:
+				response = requests.get(url+f"/pulls?per_page=100&page={i}", headers=headers)
+				pulls_url = []
+				for resp in response.josn():
+					pulls_url.append(resp['url'])
+				#print("No. of pulls:", len(pulls_url))
+			i+=1
+		return pulls_url
+			
 			
 	except Exception as e:
 		print("In get_pulls function")
