@@ -4,7 +4,7 @@ import pandas as pd
 import re
 
 #personal token
-token = "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"
+token = ""
 headers = {
 	"Authorization": "token " + token
 }
