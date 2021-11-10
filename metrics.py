@@ -4,7 +4,7 @@ import pandas as pd
 import re
 
 #personal token
-token = ""
+token = "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"
 headers = {
 	"Authorization": "token " + token
 }
@@ -18,7 +18,7 @@ headers = {
 ##optimization
 
 def get_repos():
-	df = pd.read_csv("csv/asfi_refined_50_proj.csv") 
+	df = pd.read_csv("csv/asfi_refined_80_proj.csv") 
 	project_list = []
 	project_list = df.pj_github_api_url
 	print("No. of projects:", len(project_list))
@@ -26,19 +26,16 @@ def get_repos():
 
 def get_forks(project):
 	try:
-		i = 1
-		response = requests.get(project+"/forks?per_page=100&page=1", headers=headers)
-		while response.json():
-			if response.status_code == 404:
-				return []
-			else:
-				response = requests.get(project+f"/forks?per_page=100&page={i}", headers=headers)
-				forks_url = []
-				for resp in response.json(): 
-					forks_url.append(resp['url'])
-					print("No. of forks:", len(forks_url))
-			i+=1
-		return forks_url
+		resp = requests.get(project+"/forks?per_page=100&page=1", headers=headers)
+		if resp.status_code == 404:
+			return 0
+		else:
+			response = requests.get(project+"/forks?per_page=100&page=1", headers=headers).json()
+			forks_url = []
+			for resp in response: 
+				forks_url.append(resp['url'])
+			print("No. of forks:", len(forks_url))
+			return forks_url
 
 	except Exception as e:
 		print("In get_forks function")
@@ -46,22 +43,16 @@ def get_forks(project):
 
 def get_pulls(url):
 	try:
-		i = 1
-		response = requests.get(url+"/pulls?per_page=100&page=1", headers=headers)
-		
-		while response.json():
-			
-			if response.status_code == 404:
-				return []
-			else:
-				response = requests.get(url+f"/pulls?per_page=100&page={i}", headers=headers)
-				pulls_url = []
-				for resp in response.josn():
-					pulls_url.append(resp['url'])
-				#print("No. of pulls:", len(pulls_url))
-			i+=1
-		return pulls_url
-			
+		resp = requests.get(url+"/pulls?per_page=100&page=1", headers=headers)
+		if resp.status_code == 404:
+			return 0
+		else:
+			response = requests.get(url+"/pulls?per_page=100&page=1", headers=headers).json()
+			pulls_url = []
+			for resp in response:
+				pulls_url.append(resp['url'])
+			#print("No. of pulls:", len(pulls_url))
+			return pulls_url
 			
 	except Exception as e:
 		print("In get_pulls function")
@@ -70,47 +61,48 @@ def get_pulls(url):
 def get_merge_status(pull_url):
 	response = requests.get(pull_url+"/merge", headers=headers)
 	merge_status = response.status_code
-	print(merge_status)
+	#print(merge_status)
 	return merge_status
 
 ## Metric 1 - Presence of hard forks
 def check_for_hard_forks():
-	df = pd.read_csv("csv/asfi_refined_50_proj.csv")
+	df = pd.read_csv("csv/asfi_refined_80_proj.csv")
 	df['has_hard_fork'] = NaN
-	is_hard_fork = False
+	df['total_forks'] = NaN
 
-	try:
-		repos = get_repos()
-		for repo in repos:
+	repos = get_repos()
+	for repo in repos:
+		merged_pr = 0
+		try:
 			forks = get_forks(repo)
-			
+			if forks == 0:
+				len(forks) == 0
+				is_hard_fork = False
+				df.loc[df['pj_github_api_url'] == repo, 'has_hard_fork'] = is_hard_fork
+				continue
+			df.loc[df['pj_github_api_url'] == repo, 'total_forks'] = len(forks)
 			for fork in forks:
 				pulls_data = get_pulls(fork)
-				if pulls_data == []:
-					merged_pr = 0
+				if pulls_data == [] or pulls_data == 0:
 					is_hard_fork = False
 					df.loc[df['pj_github_api_url'] == repo, 'has_hard_fork'] = is_hard_fork
-				else:
-					for pull_request in pulls_data:
-						merge_status = get_merge_status(pull_request)
-						merged_pr = 0
-						if merge_status == 0:
-							pass
-						elif merge_status == 204:
-							merged_pr += 1
-						elif merge_status == 404:
-							pass
-					if merged_pr > 2:
-						is_hard_fork = True
-						df.loc[df['pj_github_api_url'] == repo, 'has_hard_fork'] = is_hard_fork
-						
-		print(repo, is_hard_fork)
-		df.to_csv("csv/asfi_refined_50_proj.csv", index=False)
+					continue
+				for pull_request in pulls_data:
+					merge_status = get_merge_status(pull_request)
+					## PR is successfully merged
+					if merge_status == 204:
+						merged_pr += 1
+				if merged_pr >= 2:
+					is_hard_fork = True
+					df.loc[df['pj_github_api_url'] == repo, 'has_hard_fork'] = is_hard_fork
+					print(repo, fork, is_hard_fork)
 
-	except Exception as e: 
-		print("Repo Failed:", repo)
-		print('{}'.format(e))
-		pass
+		except Exception as e: 
+			print("Repo Failed:", repo)
+			print('{}'.format(e))
+			pass
+
+		df.to_csv("csv/asfi_refined_80_proj.csv", index=False)
 
 def get_comments(pull_url):
 	
@@ -137,35 +129,60 @@ def pattern_matching(comment):
 
 ## Metric 2 - Ratio of duplicate PRs
 def ratio_of_duplicate_prs():
-	df = pd.read_csv("csv/asfi_refined_50_proj.csv")
+	df = pd.read_csv("csv/asfi_refined_80_proj.csv")
 	df['ratio_of_duplicate_prs'] = NaN
-	try: 
-		repos = get_repos()
-		for repo in repos:
+	df['total_pull_requests'] = NaN
+	df['duplicate_prs'] = NaN
+
+	repos = get_repos()
+	for repo in repos:
+		duplicate_prs = 0
+		try:
 			pulls_data = get_pulls(repo)
+			if pulls_data == [] or pulls_data == 0:
+				ratio = 0
+				df.loc[df['pj_github_api_url'] == repo, 'ratio_of_duplicate_prs'] = ratio
+				df.loc[df['pj_github_api_url'] == repo, 'total_pull_requests'] = total_prs
+				df.loc[df['pj_github_api_url'] == repo, 'duplicate_prs'] = duplicate_prs
+				continue
 			total_prs = len(get_pulls(repo))
+			if total_prs == 0:
+				ratio = 0
+				df.loc[df['pj_github_api_url'] == repo, 'ratio_of_duplicate_prs'] = ratio
+				df.loc[df['pj_github_api_url'] == repo, 'total_pull_requests'] = total_prs
+				df.loc[df['pj_github_api_url'] == repo, 'duplicate_prs'] = duplicate_prs
+				continue
 
 			for pull_request in pulls_data:
 				comments = get_comments(pull_request)
 				for comment in comments:
-					duplicate_prs = pattern_matching(comment)
-		
+					dup = pattern_matching(comment)
+					duplicate_prs += dup
+			
 			ratio = duplicate_prs / total_prs
 			df.loc[df['pj_github_api_url'] == repo, 'ratio_of_duplicate_prs'] = ratio
-			print(repo, ratio)
-			df.to_csv("csv/asfi_refined_50_proj.csv", index=False)
+			df.loc[df['pj_github_api_url'] == repo, 'total_pull_requests'] = total_prs
+			df.loc[df['pj_github_api_url'] == repo, 'duplicate_prs'] = duplicate_prs
+			print(repo, ratio, "=", duplicate_prs , "/", total_prs)
 
-	except Exception as e: 
-		print("Repo Failed:", repo)
-		print('{}'.format(e))
-		pass
+		except Exception as e: 
+			print("Repo Failed:", repo)
+			print('{}'.format(e))
+			pass
 
+		df.to_csv("csv/asfi_refined_80_proj.csv", index=False)
+
+def check_rate_limit():
+	resp = requests.get("https://api.github.com/rate_limit", headers=headers).json()
+	print(resp["rate"])
+
+check_rate_limit()
 #check_for_hard_forks()
-ratio_of_duplicate_prs()
+#ratio_of_duplicate_prs()
 
 #Testing
 #get_forks("https://api.github.com/repos/apache/incubator-retired-amaterasu")
-#get_pulls("https://api.github.com/repos/kirupagaran/incubator-retired-amaterasu")
+#get_pulls("https://api.github.com/repos/apache/incubator-BRPC/forks")
 #total_prs = len(get_pulls("https://api.github.com/repos/apache/incubator-retired-amaterasu"))
 #for comment in get_comments("https://api.github.com/repos/apache/incubator-retired-amaterasu/pulls"):
 #	duplicate_prs = pattern_matching(comment)
